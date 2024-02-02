@@ -1,0 +1,75 @@
+##### https://access.redhat.com/mt/es/solutions/7005060 #####
+
+El clúster Ceph informa HEALTH_WARN with 'pools have too few placement groups' 
+
+
+Ambiente
+
+    Red Hat OpenShift Data Foundation 4.9
+
+Asunto
+
+    La verificación del estado del clúster de almacenamiento de archivos y bloques muestra la siguiente advertencia:
+    
+    1 pools have too few placement groups
+
+    ceph status está mostrando salud enHEALTH_WARN estado:
+  
+    HEALTH_WARN 1 pools have too few placement groups
+    [WRN] POOL_TOO_FEW_PGS: 1 pools have too few placement groups
+    Pool ocs-storagecluster-cephfilesystem-data0 has 32 placement groups, should have 128
+    running ceph health detail command returns 
+
+Resolución
+
+    Habilitar elpg_autoscale_mode para eliminar la advertencia en el clúster.
+
+    Abra un shell remoto para elrook-ceph-operator :
+    
+    $ oc rsh -n openshift-storage $(oc get pods -n openshift-storage -o name -l app=rook-ceph-operator)
+
+    Exportar elCEPH_ARGS variable de entorno con la ruta delceph configuración del clúster para acceder aceph grupo:
+    
+    $ export CEPH_ARGS='-c /var/lib/rook/openshift-storage/openshift-storage.config'
+
+    Selecciona elpg_autoscale_mode valor del parámetro de configuración de ceph en activado:
+    
+    $ ceph osd pool set <pool-name> pg_autoscale_mode on
+
+Causa principal
+
+    pg_autoscale_mode se establece enWARN , que lanzará alertas sanitarias cuando elpg contar para unpool necesita ser ajustado.
+    Puedes habilitarpg-autoscaling para permitir que el clúster haga recomendaciones o ajuste automáticamente el número depgs para un grupo según la utilización esperada del grupo y del grupo.
+
+Pasos de diagnóstico
+
+Descargo de responsabilidad : Los enlaces aquí contenidos a sitios web externos se proporcionan únicamente para su comodidad. Red Hat no ha revisado los enlaces y no es responsable del contenido ni de su disponibilidad. La inclusión de cualquier enlace a un sitio web externo no implica la aprobación por parte de Red Hat del sitio web o de sus entidades, productos o servicios. Usted acepta que Red Hat no es responsable de ninguna pérdida o gasto que pueda resultar debido a su uso (o dependencia de) el sitio o contenido externo.
+
+    Abra un shell remoto para elrook-ceph-operator :
+
+    $ oc rsh -n openshift-storage $(oc get pods -n openshift-storage -o name -l app=rook-ceph-operator)
+
+    Exportar elCEPH_ARGS variable de entorno con la ruta delceph configuración del clúster para acceder aceph grupo:
+    
+    $ export CEPH_ARGS='-c /var/lib/rook/openshift-storage/openshift-storage.config'
+
+    La documentación de Ceph analiza los diferentes modos que se pueden utilizar parapg_autoscale_mode .
+
+    Verifique el valor actual depg_autoscale_mode para las piscinas. ElAutoscale la columna es la piscinapg_autoscale_mode y será cualquieraon ,off , owarn :
+
+    $ ceph osd pool autoscale-status -c /var/lib/rook/openshift-storage/openshift-storage.config
+
+    POOL                                                     SIZE  TARGET SIZE  RATE   CAPACITY   RATIO  TARGET RATIO  EFFECTIVE RATIO  BIAS  PG_NUM  NEW PG_NUM  AUTOSCALE  BULK   
+    ocs-storagecluster-cephblockpool                       78888M                3.0        300.0G  0.7704        0.4900           0.3333   1.0      32              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.meta             3925                 3.0        300.0G  0.0000                                  1.0       8              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.log              1601k                3.0        300.0G  0.0000                                  1.0       8              on         False  
+    .rgw.root                                               5056                 3.0        300.0G  0.0000                                  1.0       8              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.control             0                 3.0        300.0G  0.0000                                  1.0       8              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.buckets.index   218.6k                3.0        300.0G  0.0000                                  1.0       8              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.buckets.non-ec      0                 3.0        300.0G  0.0000                                  1.0       8              on         False  
+    device_health_metrics                                  153.8k                3.0        300.0G  0.0000                                  1.0       1              on         False  
+    ocs-storagecluster-cephobjectstore.rgw.buckets.data     1518M                3.0        300.0G  0.3333        0.4900           0.3333   1.0      32              on         False  
+    ocs-storagecluster-cephfilesystem-metadata             10515k                3.0        300.0G  0.0001                                  4.0      32              on         False  
+    ocs-storagecluster-cephfilesystem-data0                 5499M                3.0        300.0G  0.3333        0.4900           0.3333   1.0      32              on         False  
+
+
