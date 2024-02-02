@@ -1,0 +1,39 @@
+OCS - Ceph status shows 'daemons have recently crashed'
+
+Asunto
+Desde la consola puede ver que el almacenamiento OCP está en estado de advertencia y la alerta CephClusterWarningState se está activando, pero no hay indicios de un problema.
+¿Cómo enumerar y gestionar todos los fallos informados en el estado ceph?
+
+Resolución
+Usando el módulo rook-ceph-operator, verifique los 'detalles de salud de ceph' para ver si hay nuevos fallos:
+
+NAMESPACE=openshift-storage;ROOK_POD=$(oc -n ${NAMESPACE} get pod -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}');oc exec -it ${ROOK_POD} -n ${NAMESPACE} -- ceph health detail  --cluster=${NAMESPACE} --conf=/var/lib/rook/${NAMESPACE}/${NAMESPACE}.config --keyring=/var/lib/rook/${NAMESPACE}/client.admin.keyring
+
+El resultado debería mostrar algo como lo siguiente:
+
+HEALTH_WARN 4 daemons have recently crashed
+RECENT_CRASH 4 daemons have recently crashed
+    mds.ocs-storagecluster-cephfilesystem-b crashed on host <some-host>
+    mds.ocs-storagecluster-cephfilesystem-b crashed on host <some-host>
+    mds.ocs-storagecluster-cephfilesystem-b crashed on host <some-host>
+    mds.ocs-storagecluster-cephfilesystem-b crashed on host <some-host>
+
+Si este es el caso, asegúrese de que la causa del accidente no continúe. Los comandos 'ceph crash ls' y 'ceph crash info' se pueden utilizar para recopilar más información sobre los fallos, incluidas las fechas asociadas a ellos:
+
+NAMESPACE=openshift-storage;ROOK_POD=$(oc -n ${NAMESPACE} get pod -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}');oc exec -it ${ROOK_POD} -n ${NAMESPACE} -- ceph crash ls  --cluster=${NAMESPACE} --conf=/var/lib/rook/${NAMESPACE}/${NAMESPACE}.config --keyring=/var/lib/rook/${NAMESPACE}/client.admin.keyring
+
+NAMESPACE=openshift-storage;ROOK_POD=$(oc -n ${NAMESPACE} get pod -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}');oc exec -it ${ROOK_POD} -n ${NAMESPACE} -- ceph crash info <crash-id> --cluster=${NAMESPACE} --conf=/var/lib/rook/${NAMESPACE}/${NAMESPACE}.config --keyring=/var/lib/rook/${NAMESPACE}/client.admin.keyring
+
+Si se decide que estos fallos no están en curso y han sido revisados ​​por el Administrador de sistemas/almacenamiento, puede archivar los fallos usando 'ceph crash archive-all' (para archivar TODOS los fallos) o 'ceph crash archive-all'. 'comando para archivar un solo fallo:
+
+NAMESPACE=openshift-storage;ROOK_POD=$(oc -n ${NAMESPACE} get pod -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}');oc exec -it ${ROOK_POD} -n ${NAMESPACE} -- ceph crash archive-all  --cluster=${NAMESPACE} --conf=/var/lib/rook/${NAMESPACE}/${NAMESPACE}.config --keyring=/var/lib/rook/${NAMESPACE}/client.admin.keyring
+
+NAMESPACE=openshift-storage;ROOK_POD=$(oc -n ${NAMESPACE} get pod -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}');oc exec -it ${ROOK_POD} -n ${NAMESPACE} -- ceph crash archive <crashid> --cluster=${NAMESPACE} --conf=/var/lib/rook/${NAMESPACE}/${NAMESPACE}.config --keyring=/var/lib/rook/${NAMESPACE}/client.admin.keyring
+
+Los fallos archivados seguirán siendo visibles a través de ceph crash ls pero no de ceph crash ls-new.
+
+Causa principal
+
+El módulo de fallo recopila información sobre los volcados de fallo del demonio y la almacena en el clúster de Ceph para su posterior análisis.
+Esta es una nueva característica implementada en RHCS 4.
+Esto significa que uno o más demonios Ceph fallaron recientemente y el administrador aún no ha archivado (reconocido) la falla. Esto puede indicar un error de software, un problema de hardware (por ejemplo, un disco defectuoso) o algún otro problema.
